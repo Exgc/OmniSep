@@ -1,11 +1,9 @@
-# **OmniSep: Unified Omni-Modality Sound Separation with Query-Mixup**
+# **[ICLR 2025] OmniSep: Unified Omni-Modality Sound Separation with Query-Mixup**
 
-**[Xize Cheng](https://salu133445.github.io/)**,  Siqi Zheng,  Zehan Wang,  Minghui Fang,  Ziang Zhang,  Rongjie Huang,  Ziyang Ma,  Shengpeng Ji,  Jialong Zuo,  Tao Jin,  Zhou Zhao  
-<br><br>
-*To appear at ICLR 2025*  
-[[arXiv]](https://arxiv.org/abs/2410.21269) • [[Demo]](https://sony.github.io/CLIPSep)  
+**[Xize Cheng](https://exgc.github.io)**,  Siqi Zheng,  Zehan Wang,  Minghui Fang,  Ziang Zhang,  Rongjie Huang,  Ziyang Ma,  Shengpeng Ji,  Jialong Zuo,  Tao Jin,  Zhou Zhao  
 <br>
-
+[【arXiv】](https://arxiv.org/abs/2410.21269) ｜[【Demo】](https://omnisep.github.io/)｜[【OpenReviewer】](https://openreview.net/forum?id=DkzZ1ooc7q)
+<br>
 ---
 
 ✅ TODO
@@ -14,8 +12,17 @@
 - [x] Release the code for data preprocess.
 - [ ] Release the inference codes.
 - [ ] Release the checkpoints.
+- [ ] Implementation based on CLAPSep.
 
 ---
+
+## 📦 Data Preparation
+
+### 🎵 MUSIC Dataset  
+Please refer to the script under [`dataset/music`](dataset/music).
+
+### 🔊 VGGSound Dataset  
+Please refer to the script under [`dataset/vggsound`](dataset/vggsound).
 
 ## 🚀 Installation
 
@@ -31,18 +38,43 @@ conda activate omnisep
 pip install -r requirements.txt
 ```
 
----
 
-## 📦 Datasets and Pre-trained Models
+## Training
+
+```bash
+python train.py \
+    -o exp/vggsound/omnisep \
+    -t data/vggsound/train.csv \
+    -v data/vggsound/val.csv \
+    --batch_size 128 \
+    --workers 20 \
+    --emb_dim 1024 \
+    --train_mode image text audio \
+    --is_feature \
+    --feature_mode imagebind
+```
 
 
-### 🎵 MUSIC Dataset  
-Please refer to the script under [`dataset/music`](dataset/music).
+## Evaluate 
 
-### 🔊 VGGSound Dataset  
-Please refer to the script under [`dataset/vggsound`](dataset/vggsound).
+Download the eval set of [MUSIC]() + [VGGSound](https://huggingface.co/datasets/Exgc/OmniSep_VGGSOUND_eval).
 
----
+Evaluate on MUSIC and VGGSound.
+```bash
+OMP_NUM_THREADS=1 python evaluate.py -o exp/vggsound/omnisep/ -l exp/vggsound/omnisep/eval_MUISC_VGGS.txt -t data/MUSIC/solo/test.csv -t2 data/vggsound/test-good-no-music.csv --no-pit --prompt_ens
+```
+
+Evaluate on VGGSoundClean + VGGSound. 
+
+```bash
+OMP_NUM_THREADS=1 python evaluate.py -o exp/vggsound/omnisep -l exp/vggsound/omnisep/eval_VGGS_VGGSN.txt -t data/vggsound/test-good.csv -t2 data/vggsound/test-no-music.csv --no-pit --prompt_ens --audio_source ./VGGSOUND-aq.npy
+```
+
+## Inference
+
+```bash
+OMP_NUM_THREADS=1 python infer.py -o exp/vggsound/clipsep_nit/  -i "demo/audio/hvCj8Dk0Su4.wav" --text_query "playing bagpipes" -f "exp/vggsound/clipsep_nit/hvCj8Dk0Su4/playing bagpipes.wav"
+```
 
 ## 🏃 Training and Inference
 
