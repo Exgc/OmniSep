@@ -393,7 +393,7 @@ if __name__ == "__main__":
         setattr(args, key, train_args[key])
 
     # Handle backward compatibility
-    args.image_model = train_args.get("image_model", "clip")
+    # args.image_model = train_args.get("image_model", "clip")
     args.train_mode = train_args.get("train_mode", "image")
     # args.audio_only = train_args.get("audio_only", False)
     args.n_labels = train_args.get("n_labels")

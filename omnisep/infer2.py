@@ -21,11 +21,11 @@ import clipsep
 import utils
 from pydub import AudioSegment
 
-
 from imagebind import data
 from imagebind.models import imagebind_model
 from imagebind.models.imagebind_model import ModalityType
 from torch.nn import functional as F
+
 
 @utils.resolve_paths
 def parse_args(args=None, namespace=None):
@@ -41,8 +41,8 @@ def parse_args(args=None, namespace=None):
         "-m", "--mix_filename", type=pathlib.Path, help="mix filename"
     )
     parser.add_argument("--text_query", help="text query")
-    parser.add_argument("--image_query", help="text query",default=None)
-    parser.add_argument("--neg_query", help="text query",default=None)
+    parser.add_argument("--image_query", help="text query", default=None)
+    parser.add_argument("--neg_query", help="text query", default=None)
     parser.add_argument(
         "-f", "--out_filename", type=pathlib.Path, help="output filename"
     )
@@ -98,7 +98,8 @@ def get_text_prompt(label):
 
 def get_text_prompts(label):
     """Get the text prompt for a label."""
-    return [f"a photo of {label}.", f"a photo of the small {label}.", f"a low resolution photo of a {label}.", f"a photo of many {label}."]
+    return [f"a photo of {label}.", f"a photo of the small {label}.", f"a low resolution photo of a {label}.",
+            f"a photo of many {label}."]
 
 
 def count_parameters(net):
@@ -107,14 +108,14 @@ def count_parameters(net):
 
 
 def recover_wav(
-    mag_mix,
-    phase_mix,
-    pred_mask,
-    n_fft=1024,
-    hop_len=256,
-    win_len=1024,
-    use_log_freq=True,
-    use_binary_mask=True,
+        mag_mix,
+        phase_mix,
+        pred_mask,
+        n_fft=1024,
+        hop_len=256,
+        win_len=1024,
+        use_log_freq=True,
+        use_binary_mask=True,
 ):
     """Recover the waveform."""
     # Unwarp log scale
@@ -152,7 +153,7 @@ def recover_wav(
     return pred_wav
 
 
-def mix_audios(audio_paths,target_sample_rate=16000):
+def mix_audios(audio_paths, target_sample_rate=16000):
     mixed_audio = None
     for audio_path in audio_paths:
         # 加载音频文件并将采样率调整为目标采样率
@@ -164,6 +165,7 @@ def mix_audios(audio_paths,target_sample_rate=16000):
         mixed_audio += y[:len(mixed_audio)]
 
     return mixed_audio
+
 
 def new_clip_forward(self, image=None, text=None):
     """A CLIP forward function that automatically chooses the mode."""
@@ -177,7 +179,6 @@ def new_clip_forward(self, image=None, text=None):
 
 
 def load_data(filename, args):
-
     # Load the audio
     print(filename)
     print('\n')
@@ -185,9 +186,8 @@ def load_data(filename, args):
     # audio_raw = torch.tensor(audio_raw)
 
     # Initialize an empty audio array
-    audio_len = 65535 * (audio_raw.shape[0]//65535 +1) if args.audio_len is None else args.audio_len
+    audio_len = 65535 * (audio_raw.shape[0] // 65535 + 1) if args.audio_len is None else args.audio_len
     audio = np.zeros(args.audio_len, dtype=np.float32)
-
 
     # Repeat if audio is too short
     audio_sec = 1.0 * audio_len / args.audio_rate
@@ -337,24 +337,25 @@ def main(args):
 
         # Compute image embedding
         img_emb = []
-        
-        inputs={}
+
+        inputs = {}
         if args.image_query is not None and args.text_query is not None:
-            inputs.setdefault(ModalityType.TEXT,data.load_and_transform_text([args.text_query], device))
-            inputs.setdefault(ModalityType.VISION,data.load_and_transform_vision_data([args.image_query], device))
-            embeddings = (F.normalize(imagebind_net(inputs)[ModalityType.VISION])+F.normalize(imagebind_net(inputs)[ModalityType.TEXT]))/2
+            inputs.setdefault(ModalityType.TEXT, data.load_and_transform_text([args.text_query], device))
+            inputs.setdefault(ModalityType.VISION, data.load_and_transform_vision_data([args.image_query], device))
+            embeddings = (F.normalize(imagebind_net(inputs)[ModalityType.VISION]) + F.normalize(
+                imagebind_net(inputs)[ModalityType.TEXT])) / 2
         elif args.text_query is not None:
-            inputs.setdefault(ModalityType.TEXT,data.load_and_transform_text([args.text_query], device))
+            inputs.setdefault(ModalityType.TEXT, data.load_and_transform_text([args.text_query], device))
             embeddings = F.normalize(imagebind_net(inputs)[ModalityType.TEXT])
         else:
-            inputs.setdefault(ModalityType.VISION,data.load_and_transform_vision_data([args.image_query], device))
+            inputs.setdefault(ModalityType.VISION, data.load_and_transform_vision_data([args.image_query], device))
             embeddings = F.normalize(imagebind_net(inputs)[ModalityType.VISION])
 
         if args.neg_query is not None:
-            inputs={}
-            inputs.setdefault(ModalityType.TEXT,data.load_and_transform_text([args.neg_query], device))
+            inputs = {}
+            inputs.setdefault(ModalityType.TEXT, data.load_and_transform_text([args.neg_query], device))
             neg_embeddings = F.normalize(imagebind_net(inputs)[ModalityType.TEXT])
-            embeddings=1.5*embeddings-0.5*neg_embeddings
+            embeddings = 1.5 * embeddings - 0.5 * neg_embeddings
 
         img_emb.append(embeddings.type(mag_mix.dtype))
 
@@ -419,39 +420,31 @@ if __name__ == "__main__":
     train_args = utils.load_json(args.out_dir / "train-args.json")
     logging.info(f"Using loaded arguments:\n{pprint.pformat(train_args)}")
     for key in (
-        "audio_rate",
-        "n_fft",
-        "hop_len",
-        "win_len",
-        "img_size",
-        "fps",
-        "n_mix",
-        "fusion",
-        "channels",
-        "layers",
-        "frames",
-        "stride_frames",
-        "binary_mask",
-        "loss",
-        "weighted_loss",
-        "log_freq",
+            "audio_rate",
+            "n_fft",
+            "hop_len",
+            "win_len",
+            "img_size",
+            "fps",
+            "n_mix",
+            "channels",
+            "layers",
+            "frames",
+            "stride_frames",
+            "binary_mask",
+            "loss",
+            "weighted_loss",
+            "log_freq",
     ):
         setattr(args, key, train_args[key])
 
     # Handle backward compatibility
-    args.image_model = train_args.get("image_model", "clip")
     args.train_mode = train_args.get("train_mode", "image")
     # args.audio_only = train_args.get("audio_only", False)
     args.n_labels = train_args.get("n_labels")
-    args.label_map_filename = train_args.get("label_map_filename")
-    args.reg_coef = train_args.get("reg_coef", 0)
-    args.reg_epsilon = train_args.get("reg_epsilon", 0.1)
-    args.reg2_coef = train_args.get("reg2_coef", 0)
-    args.reg2_epsilon = train_args.get("reg2_epsilon", 0.5)
     args.emb_dim = train_args.get("emb_dim", 512)
     # Run the main program
     main(args)
-
 
 """
 OMP_NUM_THREADS=1 python infer2.py -o exp/vggsound/imagebindsep_late_hybrid_mixup/  -i "" "" --text_query "/nfs/chengxize.cxz/data/VGGSOUND/frames/trai" -f "exp/vggsound/infer2/-query.wav"

@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 import utils
 
+
 def init_weights(net):
     classname = net.__class__.__name__
     if classname.find("Conv") != -1:
@@ -22,14 +23,14 @@ class OmniSep(torch.nn.Module):
     """Separation model based on the CLIP model."""
 
     def __init__(
-        self,
-        n_mix,
-        layers=7,
-        channels=32,
-        use_log_freq=True,
-        use_weighted_loss=True,
-        use_binary_mask=True,
-        emb_dim=512
+            self,
+            n_mix,
+            layers=7,
+            channels=32,
+            use_log_freq=True,
+            use_weighted_loss=True,
+            use_binary_mask=True,
+            emb_dim=512
     ):
         super().__init__()
         self.n_mix = n_mix
@@ -52,7 +53,7 @@ class OmniSep(torch.nn.Module):
         N = self.n_mix
         mag_mix = batch["mag_mix"]
         mags = batch["mags"]
-        
+
         # Pass through the frame net -> Bx1xC
         feat_frames_pre = [self.frame_net(img_emb[n]) for n in range(N)]
         feat_frames = [torch.sigmoid(feat) for feat in feat_frames_pre]
@@ -78,13 +79,13 @@ class OmniSep(torch.nn.Module):
 
         B = mag_mix.size(0)
         T = mag_mix.size(3)
-        
+
         # Warp the spectrogram
         if self.use_log_freq:
             grid_warp = torch.from_numpy(
                 utils.warpgrid(B, 256, T, warp=True)
             )
-            grid_warp=grid_warp.to(mag_mix.device)
+            grid_warp = grid_warp.to(mag_mix.device)
             mag_mix = F.grid_sample(mag_mix, grid_warp, align_corners=True)
             for n in range(N):
                 mags[n] = F.grid_sample(mags[n], grid_warp, align_corners=True)
@@ -301,7 +302,6 @@ class OmniSep(torch.nn.Module):
         }
 
 
-
 class ResnetDilated(nn.Module):
     def __init__(self, orig_resnet, pool_type="maxpool", dilate_scale=16):
         super().__init__()
@@ -361,16 +361,16 @@ class UNetBlock(nn.Module):
     """
 
     def __init__(
-        self,
-        outer_nc,
-        inner_input_nc,
-        input_nc=None,
-        submodule=None,
-        outermost=False,
-        innermost=False,
-        use_dropout=False,
-        inner_output_nc=None,
-        noskip=False,
+            self,
+            outer_nc,
+            inner_input_nc,
+            input_nc=None,
+            submodule=None,
+            outermost=False,
+            innermost=False,
+            use_dropout=False,
+            inner_output_nc=None,
+            noskip=False,
     ):
         super().__init__()
         self.outermost = outermost
@@ -464,12 +464,12 @@ class UNet(nn.Module):
     """A UNet model."""
 
     def __init__(
-        self,
-        in_dim=1,
-        out_dim=64,
-        num_downs=5,
-        ngf=64,
-        use_dropout=False,
+            self,
+            in_dim=1,
+            out_dim=64,
+            num_downs=5,
+            ngf=64,
+            use_dropout=False,
     ):
         super().__init__()
 
@@ -520,16 +520,16 @@ class CondUNetBlock(nn.Module):
     """
 
     def __init__(
-        self,
-        outer_nc,
-        inner_input_nc,
-        input_nc=None,
-        submodule=None,
-        outermost=False,
-        innermost=False,
-        inner_output_nc=None,
-        noskip=False,
-        cond_nc=None,
+            self,
+            outer_nc,
+            inner_input_nc,
+            input_nc=None,
+            submodule=None,
+            outermost=False,
+            innermost=False,
+            inner_output_nc=None,
+            noskip=False,
+            cond_nc=None,
     ):
         super().__init__()
         self.outermost = outermost
@@ -636,13 +636,13 @@ class CondUNet(nn.Module):
     """A UNet model."""
 
     def __init__(
-        self,
-        in_dim=1,
-        out_dim=64,
-        cond_dim=32,
-        num_downs=5,
-        ngf=64,
-        use_dropout=False,
+            self,
+            in_dim=1,
+            out_dim=64,
+            cond_dim=32,
+            num_downs=5,
+            ngf=64,
+            use_dropout=False,
     ):
         super().__init__()
 
@@ -750,4 +750,3 @@ class Bias(nn.Module):
         z = torch.bmm(feats_img, feat_sound).view(B, HI, WI, HS, WS)
         z = z + self.bias
         return z
-

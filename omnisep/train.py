@@ -126,13 +126,7 @@ def parse_args(args=None, namespace=None):
         "--fps", default=1, type=float, help="video frame sampling rate"
     )
 
-    # Model
-    # parser.add_argument(
-    #     "--train_mode",
-    #     default="image",
-    #     choices=("image", "text", "hybrid"),
-    #     help="training mode",
-    # )
+    # modality
     parser.add_argument(
         "--train_mode",
         nargs='+',
@@ -142,17 +136,7 @@ def parse_args(args=None, namespace=None):
     )
 
     parser.add_argument(
-        "--image_model",
-        default="imagebind",
-        help="image model",
-    )
-    parser.add_argument(
         "--n_mix", default=2, type=int, help="number of sounds to mix"
-    )
-    parser.add_argument(
-        "--fusion",
-        default="late",
-        help="fusion type",
     )
     parser.add_argument(
         "--channels", default=32, type=int, help="number of channels"
@@ -189,28 +173,6 @@ def parse_args(args=None, namespace=None):
         help="whether to use log frequency scale",
     )
     parser.add_argument("--n_labels", type=int, help="number of labels")
-    parser.add_argument(
-        "--label_map_filename",
-        type=pathlib.Path,
-        help="filename to the label map",
-    )
-    parser.add_argument(
-        "--bert_embeddings",
-        type=pathlib.Path,
-        help="filename of the bert embedding dictionary",
-    )
-    parser.add_argument(
-        "--reg_coef", default=0, type=float, help="regularizer weight"
-    )
-    parser.add_argument(
-        "--reg_epsilon", default=0.1, type=float, help="regularizer epsilon"
-    )
-    parser.add_argument(
-        "--reg2_coef", default=0.1, type=float, help="regularizer weight"
-    )
-    parser.add_argument(
-        "--reg2_epsilon", default=0.25, type=float, help="regularizer epsilon"
-    )
 
     # Training
     parser.add_argument(
@@ -275,9 +237,6 @@ def parse_args(args=None, namespace=None):
     )
     parser.add_argument(
         "--feature_mode", default='imagebind', type=str, help="use feature only"
-    )
-    parser.add_argument(
-        "--feat_func", default='None', type=str, choices=("normalize", "mixup", "None"), help="use feature only"
     )
     return parser.parse_args(args=args, namespace=namespace)
 
@@ -359,7 +318,6 @@ def main(args):
     if args.weights is not None:
         model.load_state_dict(torch.load(args.weights, map_location=device))
         logging.info(f"Loaded the model weights from: {args.weights}")
-
 
     if args.is_feature:
         # Datasets and loaders

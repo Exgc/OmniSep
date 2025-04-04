@@ -81,12 +81,6 @@ def parse_args(args=None, namespace=None):
         help="whether to compute metrics",
     )
     parser.add_argument(
-        "--pit",
-        default=True,
-        action=argparse.BooleanOptionalAction,
-        help="whether to include PIT streams",
-    )
-    parser.add_argument(
         "--prompt_ens",
         default=True,
         action=argparse.BooleanOptionalAction,

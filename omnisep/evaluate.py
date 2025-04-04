@@ -21,7 +21,7 @@ import torch.utils.data
 import torchvision
 import tqdm
 
-import omnisep
+from omnisep import OmniSep
 import dataset
 import utils
 from torch.nn import functional as F
@@ -153,10 +153,10 @@ def parse_args(args=None, namespace=None):
         "--neg_factor", default=0.5, type=float, help="neg_factor"
     )
     parser.add_argument(
-        "--rag", action="store_true", help="use feature only"
+        "--aug", action="store_true", help="use feature only"
     )
     parser.add_argument(
-        "--rag_path", default='/nfs/chengxize.cxz/projects/clipsep/clipsep/MUSIC-audio.npy', type=str, help="rag_path"
+        "--aug_path", default='/nfs/chengxize.cxz/projects/clipsep/clipsep/MUSIC-audio.npy', type=str, help="aug_path"
     )
     parser.add_argument(
         "--audio_source", default=None, type=str, help="audio_source"
@@ -180,15 +180,8 @@ def calc_metrics(
         use_binary_mask=True,
         backend="mus_eval",
         threshold=0.5,
-        image_model="clip",
-        include_pit=True,
 ):
     """Calculate the evaluation metrics."""
-    if "pit" in image_model:
-        assert (
-                n_mix == 2
-        ), f"`n_mix` must be 2 when `image_model` is {image_model}"
-
     # Initialize lists
     metrics = collections.defaultdict(list)
 
@@ -197,66 +190,7 @@ def calc_metrics(
     phase_mix = batch["phase_mix"]
     audios = batch["audios"]
 
-    if "clipsepnit" in image_model:
-        if image_model in ("clipsepnit"):
-            if include_pit:
-                pred_masks = [
-                    torch.clamp(
-                        torch.sigmoid(out["pred_masks"][0])
-                        + torch.sigmoid(out["pit_masks"][0]),
-                        max=1,
-                    ),
-                    1
-                    - torch.clamp(
-                        torch.sigmoid(out["pred_masks"][0])
-                        + torch.sigmoid(out["pit_masks"][0]),
-                        max=1,
-                    ),
-                ]
-                pred_masks_alt = [
-                    torch.clamp(
-                        torch.sigmoid(out["pred_masks"][0])
-                        + torch.sigmoid(out["pit_masks"][1]),
-                        max=1,
-                    ),
-                    1
-                    - torch.clamp(
-                        torch.sigmoid(out["pred_masks"][0])
-                        + torch.sigmoid(out["pit_masks"][1]),
-                        max=1,
-                    ),
-                ]
-            else:
-                pred_masks = [
-                    torch.sigmoid(out["pred_masks"][0]),
-                    1 - torch.sigmoid(out["pred_masks"][0]),
-                ]
-        else:
-            if include_pit:
-                pred_masks = [
-                    torch.sigmoid(out["pred_masks"][0] + out["pit_masks"][0]),
-                    1
-                    - torch.sigmoid(
-                        out["pred_masks"][0] + out["pit_masks"][0]
-                    ),
-                ]
-                pred_masks_alt = [
-                    torch.sigmoid(out["pred_masks"][0] + out["pit_masks"][1]),
-                    1
-                    - torch.sigmoid(
-                        out["pred_masks"][0] + out["pit_masks"][1]
-                    ),
-                ]
-            else:
-                pred_masks = [
-                    torch.sigmoid(out["pred_masks"][0]),
-                    1 - torch.sigmoid(out["pred_masks"][0]),
-                ]
-    elif image_model == "pit":
-        pred_masks = [out["pred_masks"][0], 1 - out["pred_masks"][0]]
-        pred_masks_alt = [1 - out["pred_masks"][0], out["pred_masks"][0]]
-    else:
-        pred_masks = [out["pred_masks"][0], 1 - out["pred_masks"][0]]
+    pred_masks = [out["pred_masks"][0], 1 - out["pred_masks"][0]]
 
     # Unwarp log scale
     N = n_mix
@@ -288,17 +222,6 @@ def calc_metrics(
             pred_masks_linear[n] = (pred_masks_linear[n] > threshold).astype(
                 np.float32
             )
-    if "pit" in image_model and include_pit:
-        for n in range(N):
-            pred_masks_linear_alt[n] = (
-                pred_masks_linear_alt[n].detach().cpu().numpy()
-            )
-
-            # Apply a threshold
-            if use_binary_mask:
-                pred_masks_linear_alt[n] = (
-                        pred_masks_linear_alt[n] > threshold
-                ).astype(np.float32)
 
     # Loop over each sample
     for j in range(B):
@@ -393,104 +316,20 @@ def main(args):
 
     # Create the model
     logging.info(f"Creating the model...")
-    if args.image_model == "label_only":
-        label_map = utils.load_json(args.label_map_filename)
-        model = clipsep.LabelSepV2(
-            args.n_mix,
-            args.n_labels,
-            label_map,
-            args.layers,
-            args.channels,
-            use_log_freq=args.log_freq,
-            use_weighted_loss=args.weighted_loss,
-            use_binary_mask=args.binary_mask,
-            emb_dim=args.emb_dim
-        )
-    elif args.image_model == "bert":
-        label_map = utils.load_json(args.label_map_filename)
-        model = clipsep.BERTSep(
-            args.n_mix,
-            label_map,
-            args.layers,
-            args.channels,
-            use_log_freq=args.log_freq,
-            use_weighted_loss=args.weighted_loss,
-            use_binary_mask=args.binary_mask,
-            bert_embeddings=args.bert_embeddings
-        )
-    elif args.image_model == "pit":
-        model = clipsep.PITSep(
-            args.n_mix,
-            args.layers,
-            args.channels,
-            use_log_freq=args.log_freq,
-            use_weighted_loss=args.weighted_loss,
-            use_binary_mask=args.binary_mask,
-        )
-    elif args.image_model == "clipsepnit":
-        model = clipsep.CLIPPITSepV4(
-            args.n_mix,
-            args.layers,
-            args.channels,
-            use_log_freq=args.log_freq,
-            use_weighted_loss=args.weighted_loss,
-            use_binary_mask=args.binary_mask,
-            reg_coef=args.reg_coef,
-            reg2_coef=args.reg2_coef,
-            reg2_epsilon=args.reg2_epsilon,
-            emb_dim=args.emb_dim
-        )
-    elif args.fusion == "late":
-        model = clipsep.CLIPSep(
-            args.n_mix,
-            args.layers,
-            args.channels,
-            use_log_freq=args.log_freq,
-            use_weighted_loss=args.weighted_loss,
-            use_binary_mask=args.binary_mask,
-            emb_dim=args.emb_dim
-        )
-    elif args.fusion == "early":
-        model = clipsep.CLIPSepV2(
-            args.n_mix,
-            args.layers,
-            args.channels,
-            use_log_freq=args.log_freq,
-            use_weighted_loss=args.weighted_loss,
-            use_binary_mask=args.binary_mask,
-            emb_dim=args.emb_dim
-        )
-    elif args.fusion == "middle":
-        model = clipsep.CLIPSepV3(
-            args.n_mix,
-            args.layers,
-            args.channels,
-            use_log_freq=args.log_freq,
-            use_weighted_loss=args.weighted_loss,
-            use_binary_mask=args.binary_mask,
-            emb_dim=args.emb_dim
-        )
+
+    model = OmniSep(
+        args.n_mix,
+        args.layers,
+        args.channels,
+        use_log_freq=args.log_freq,
+        use_weighted_loss=args.weighted_loss,
+        use_binary_mask=args.binary_mask,
+        emb_dim=args.emb_dim,
+    )
     model = torch.nn.DataParallel(model, device_ids=range(args.gpus))
     model.to(device)
 
-    # Create the image model
-    if "clip" in args.image_model:
-        # Load the pretrained CLIP net
-        clip_net, _ = clip.load("ViT-B/32", device)
-        clip_net.old_forward = clip_net.forward
-        clip_net.forward = types.MethodType(new_clip_forward, clip_net)
-        clip_net = torch.nn.DataParallel(clip_net, device_ids=range(args.gpus))
-        clip_net.to(device)
-        clip_net.eval()
-    elif args.image_model == "sop":
-        # Load the pretrained ResNet model
-        res_net = clipsep.ResnetDilated(
-            torchvision.models.resnet18(weights="DEFAULT")
-        )
-        res_net = torch.nn.DataParallel(res_net, device_ids=range(args.gpus))
-        res_net.to(device)
-        res_net.eval()
-    elif 'imagebind' in args.image_model:
+    if not args.is_feature:
         imagebind_net = imagebind_model.imagebind_huge(pretrained=True)
         imagebind_net = torch.nn.DataParallel(imagebind_net, device_ids=range(args.gpus))
         imagebind_net.to(device)
@@ -561,15 +400,9 @@ def main(args):
 
     # Star evaluation
     logging.info("Evaluating...")
-    if args.audio_only or args.image_model in ("label_only", "bert", "pit"):
-        test_modes = ["text"]
-    elif args.image_model == "sop":
-        test_modes = ["image"]
-    else:
-        test_modes = ['omni']
-        # test_modes = ['audio']
-    if args.rag:
-        ref_emb = torch.tensor(np.load(args.rag_path), dtype=torch.float32).to(device)
+    test_modes = ['text', 'audio', 'image', 'omni']
+    if args.aug:
+        ref_emb = torch.tensor(np.load(args.aug_path), dtype=torch.float32).to(device)
     res = []
     if args.audio_source is not None:
         audio_source = np.load(args.audio_source, allow_pickle=True).item()
@@ -586,68 +419,34 @@ def main(args):
                 # Compute image embedding
                 B = batch["mag_mix"].size(0)
                 img_emb = []
-                if args.is_feature:
-                    # Use the corresponding inputs
-                    if mode == "image":
-                        emb = F.normalize(batch['frames_feat'][0].mean(1).to(device))
-                    elif mode == "text":
-                        emb = F.normalize(batch['text_feat'][0].to(device))
-                    elif mode == "audio":
-                        B = batch["mag_mix"].size(0)
-                        audio_emb = []
-                        for b in range(B):
-                            audio_emb.append(
-                                torch.tensor(audio_source[batch["infos"][0][3][b]], dtype=torch.float32).to(
-                                    device).mean(0))
-                        emb = F.normalize(torch.stack(audio_emb))
-                        # emb=F.normalize(batch['audio_feat'][0].to(device))
-                    elif mode == "omni":
-                        B = batch["mag_mix"].size(0)
-                        audio_emb = []
-                        for b in range(B):
-                            audio_emb.append(
-                                torch.tensor(audio_source[batch["infos"][0][3][b]], dtype=torch.float32).to(
-                                    device).mean(0))
-                        emb = F.normalize((F.normalize(batch['frames_feat'][0].mean(1).to(device)) + F.normalize(
-                            batch['text_feat'][0].to(device))) / 2)
-                    img_emb.append(emb)
-                else:
-
-                    # Set the training mode
-                    if mode == "image":
-                        frames = batch["frames"][0]
-                        (B, T, C, H, W) = frames.size()
-                        inputs = {
-                            ModalityType.VISION: frames.view(B * T, C, H, W)
-                        }
-                        out = imagebind_net(inputs)[ModalityType.VISION].type(frames.dtype)
-                        C = out.size(1)
-                        img_emb.append(out.view(B, T, C).mean(1))
-                    elif mode == "text":
-                        B = batch["mag_mix"].size(0)
-
-                        text_inputs = []
-                        for b in range(B):
-                            prompt = batch["infos"][0][3][b]
-
-                            text_inputs.append(clip.tokenize(prompt))
-                        text_inputs = torch.cat(text_inputs, dim=0)
-                        inputs = {
-                            ModalityType.TEXT: text_inputs
-                        }
-                        out = imagebind_net(inputs)[ModalityType.TEXT].type(batch["mag_mix"].dtype)
-                        img_emb.append(out)
-                    elif mode == 'audio':
-                        B = batch["mag_mix"].size(0)
-                        audio_emb = []
-                        for b in range(B):
-                            audio_emb.append(
-                                torch.tensor(audio_source[batch["infos"][0][3][b]], dtype=torch.float32).to(
-                                    device).mean(0))
-                        img_emb.append(F.normalize(torch.stack(audio_emb)))
-
-
-                if args.rag:
+                assert args.is_feature
+                # Use the corresponding inputs
+                if mode == "image":
+                    emb = F.normalize(batch['frames_feat'][0].mean(1).to(device))
+                elif mode == "text":
+                    emb = F.normalize(batch['text_feat'][0].to(device))
+                elif mode == "audio":
+                    B = batch["mag_mix"].size(0)
+                    audio_emb = []
+                    for b in range(B):
+                        audio_emb.append(
+                            torch.tensor(audio_source[batch["infos"][0][3][b]], dtype=torch.float32).to(
+                                device).mean(0))
+                    emb = F.normalize(torch.stack(audio_emb))
+                elif mode == "omni":
+                    B = batch["mag_mix"].size(0)
+                    audio_emb = []
+                    for b in range(B):
+                        audio_emb.append(
+                            torch.tensor(audio_source[batch["infos"][0][3][b]], dtype=torch.float32).to(
+                                device).mean(0))
+                    emb = F.normalize((F.normalize(batch['frames_feat'][0].mean(1).to(device)) * 2 +
+                                       F.normalize(batch['text_feat'][0].to(device)) * 2 +
+                                       F.normalize(torch.stack(audio_emb))
+                                       ) / 5)
+                img_emb.append(emb)
+                if args.aug:
+                    # Query Augmentation
                     sim = ref_emb @ img_emb[0].T
                     mx_idx_list = torch.argmax(sim, dim=0)
                     out = []
@@ -656,9 +455,11 @@ def main(args):
                     img_emb[0] = F.normalize(torch.stack(out))
 
                 if args.is_neg:
-                    emb = img_emb[0] * (1 + args.neg_factor) - args.neg_factor * F.normalize(
-                        batch['neg_feat'][0].to(device))
+                    # Negative Query
+                    emb = img_emb[0] * (1 + args.neg_factor) \
+                          - args.neg_factor * F.normalize(batch['neg_feat'][0].to(device))
                     img_emb[0] = emb
+
                 batch["mag_mix"] = batch["mag_mix"].to(device)
                 batch["mags"] = [x.to(device) for x in batch["mags"]]
                 # Forward pass
@@ -675,9 +476,7 @@ def main(args):
                     use_log_freq=args.log_freq,
                     use_binary_mask=args.binary,
                     backend=args.backend,
-                    threshold=args.threshold,
-                    image_model=args.image_model,
-                    include_pit=args.pit,
+                    threshold=args.threshold
                 )
                 for key in batch_metrics:
                     metrics[key].extend(batch_metrics[key])
@@ -761,7 +560,6 @@ if __name__ == "__main__":
             "img_size",
             "fps",
             "n_mix",
-            "fusion",
             "channels",
             "layers",
             "frames",
@@ -774,16 +572,9 @@ if __name__ == "__main__":
         setattr(args, key, train_args[key])
 
     # Handle backward compatibility
-    args.image_model = train_args.get("image_model", "clip")
     args.train_mode = train_args.get("train_mode", "image")
     # args.audio_only = train_args.get("audio_only", False)
     args.n_labels = train_args.get("n_labels")
-    args.label_map_filename = train_args.get("label_map_filename")
-    args.bert_embeddings = train_args.get("bert_embeddings")
-    args.reg_coef = train_args.get("reg_coef", 0)
-    args.reg_epsilon = train_args.get("reg_epsilon", 0.1)
-    args.reg2_coef = train_args.get("reg2_coef", 0)
-    args.reg2_epsilon = train_args.get("reg2_epsilon", 0.5)
     args.emb_dim = train_args.get("emb_dim", 512)
     args.is_feature = train_args.get("is_feature", False)
     args.feature_mode = train_args.get("feature_mode", 'imagebind')
