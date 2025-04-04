@@ -19,19 +19,6 @@ def _convert_image_to_rgb(image):
     return image.convert("RGB")
 
 
-# def transform():
-#     """Preprocessing transformations used in the CLIP model."""
-#     return torchvision.transforms.Compose(
-#         [
-#             _convert_image_to_rgb,
-#             torchvision.transforms.ToTensor(),
-#             torchvision.transforms.Normalize(
-#                 (0.48145466, 0.4578275, 0.40821073),
-#                 (0.26862954, 0.26130258, 0.27577711),
-#             ),
-#         ]
-#     )
-
 def transform(n_px=224):
     """Preprocessing transformations used in the CLIP model."""
     return torchvision.transforms.Compose(
@@ -74,7 +61,6 @@ class MixFeaDataset(torch.utils.data.Dataset):
         audio_only=False,
         is_feature=False,
         feature_mode='imagebind',
-        is_f5=False
     ):
         assert split in (
             "train",
@@ -124,13 +110,6 @@ class MixFeaDataset(torch.utils.data.Dataset):
             self.samples = self.samples[:max_sample]
         self.is_feature=is_feature
         self.feature_mode=feature_mode
-
-        self.is_f5=is_f5
-        if self.is_f5:
-            split_name=filename.stem
-            print('------- start loading h5 file  -------')
-            self.h5_file = h5py.File(f'/nfs/chengxize.cxz/data/VGGSOUND/imagebind/h5/{split_name}.h5', 'r')
-            print('------- finish loading h5 file -------')
 
     def __len__(self):
         return len(self.samples)
@@ -192,18 +171,7 @@ class MixFeaDataset(torch.utils.data.Dataset):
             center_time = (center_frames[n] - 0.5) / self.fps
             audios[n] = self._load_audio(filenames_audio[n], center_time)
 
-            if self.is_f5:
-
-                idx='_'.join(infos[n][1].split('/')[-3:])
-                group = self.h5_file[idx]
-                audio_feat[n] = torch.tensor(group['audio'])
-                text_feat[n] = torch.tensor(group['text'])
-                if not self.audio_only:
-                    feats=[]
-                    for filename_frame in filenames_frame[n]:
-                        feats.append(torch.tensor(group[filename_frame.split('/')[-1]]))
-                    frames_feat[n]=torch.stack(feats)
-            elif self.is_feature:
+            if self.is_feature:
                 audio_npy=filenames_audio[n].replace('audio',f'{self.feature_mode}/audio').replace('.wav','.npy')
                 audio_feat[n]=torch.tensor(np.load(audio_npy))
                 text_npy=filenames_audio[n].replace('audio',f'{self.feature_mode}/text').replace('.wav','.npy')

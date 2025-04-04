@@ -11,6 +11,7 @@
 ✅ TODO
 
 - [x] Release the omnisep training codes.
+- [x] Release the code for data preprocess.
 - [ ] Release the inference codes.
 - [ ] Release the checkpoints.
 
@@ -34,11 +35,6 @@ pip install -r requirements.txt
 
 ## 📦 Datasets and Pre-trained Models
 
-We provide scripts to download the datasets used in the paper and the pre-trained models.  
-Downloaded data and checkpoints will be saved to:
-
-- `CLIPSep/clipsep/data`
-- `CLIPSep/clipsep/exp/vggsound`
 
 ### 🎵 MUSIC Dataset  
 Please refer to the script under [`dataset/music`](dataset/music).

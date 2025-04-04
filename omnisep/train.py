@@ -8,7 +8,6 @@ import shutil
 import sys
 import types
 import time
-import clip
 import numpy as np
 import torch
 import torch.optim
@@ -361,10 +360,6 @@ def main(args):
         model.load_state_dict(torch.load(args.weights, map_location=device))
         logging.info(f"Loaded the model weights from: {args.weights}")
 
-    imagebind_net = imagebind_model.imagebind_huge(pretrained=True)
-    imagebind_net = torch.nn.DataParallel(imagebind_net, device_ids=range(args.gpus))
-    imagebind_net.to(device)
-    imagebind_net.eval()
 
     if args.is_feature:
         # Datasets and loaders

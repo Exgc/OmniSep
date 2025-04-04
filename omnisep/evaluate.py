@@ -21,7 +21,7 @@ import torch.utils.data
 import torchvision
 import tqdm
 
-import clipsep
+import omnisep
 import dataset
 import utils
 from torch.nn import functional as F
@@ -164,17 +164,6 @@ def parse_args(args=None, namespace=None):
     return parser.parse_args(args=args, namespace=namespace)
 
 
-def get_text_prompt(label):
-    """Get the text prompt for a label."""
-    return f"a photo of {label}"
-
-
-def get_text_prompts(label):
-    """Get the text prompt for a label."""
-    return [f"a photo of {label}.", f"a photo of the small {label}.", f"a photo of the small {label}.",
-            f"a low resolution photo of a {label}.", f"a photo of many {label}."]
-
-
 def count_parameters(net):
     """Return the number of parameters in a model."""
     return sum(p.numel() for p in net.parameters())
@@ -288,24 +277,6 @@ def calc_metrics(
             )
         else:
             pred_masks_linear[n] = pred_masks[n]
-    if "pit" in image_model and include_pit:
-        pred_masks_linear_alt = [None] * N
-        for n in range(N):
-            if use_log_freq:
-                grid_unwarp_alt = torch.from_numpy(
-                    utils.warpgrid(
-                        B,
-                        n_fft // 2 + 1,
-                        pred_masks_alt[0].size(3),
-                        warp=False,
-                    )
-                ).to(pred_masks_alt[n].device)
-                pred_masks_linear_alt[n] = F.grid_sample(
-                    pred_masks_alt[n], grid_unwarp_alt, align_corners=True
-                )
-            else:
-                pred_masks_linear_alt[n] = pred_masks_alt[n]
-
     # Convert into numpy arrays
     mag_mix = mag_mix.detach().cpu().numpy()
     phase_mix = phase_mix.detach().cpu().numpy()
@@ -344,17 +315,6 @@ def calc_metrics(
             pred_wavs[n] = utils.istft_reconstruction(
                 pred_mag, phase_mix[j, 0], hop_len=hop_len, win_len=win_len
             )
-        if "pit" in image_model and include_pit:
-            pred_wavs_alt = [None] * N
-            for n in range(N):
-                pred_mag_alt = mag_mix[j, 0] * pred_masks_linear_alt[n][j, 0]
-                pred_wavs_alt[n] = utils.istft_reconstruction(
-                    pred_mag_alt,
-                    phase_mix[j, 0],
-                    hop_len=hop_len,
-                    win_len=win_len,
-                )
-
         # Compute separation performance
         L = pred_wavs[0].shape[0]
         # print('L = {}'.format(L))
@@ -398,48 +358,10 @@ def calc_metrics(
         else:
             raise ValueError(f"Unknown backend : {backend}.")
 
-        # Handle PIT
-        if "pit" in image_model and include_pit:
-            L = pred_wavs_alt[0].shape[0]
-            valid = True
-            for n in range(N):
-                valid *= np.sum(np.abs(gts_wav[n])) > 1e-5
-                valid *= np.sum(np.abs(pred_wavs_alt[n])) > 1e-5
-            if not valid:
-                continue
-            if backend == "museval":
-                sdr_alt, _, sir_alt, sar_alt, _ = museval.metrics.bss_eval(
-                    np.asarray(gts_wav), np.asarray(pred_wavs_alt), np.inf
-                )
-                sdr_alt = sdr_alt[:1, 0]
-                sir_alt = sir_alt[:1, 0]
-                sar_alt = sar_alt[:1, 0]
-            elif backend == "mir_eval":
-                (
-                    sdr_alt,
-                    sir_alt,
-                    sar_alt,
-                    _,
-                ) = mir_eval.separation.bss_eval_sources(
-                    np.asarray(gts_wav), np.asarray(pred_wavs_alt), False
-                )
-            else:
-                raise ValueError(f"Unknown backend : {backend}.")
-
-            if sdr.mean() >= sdr_alt.mean():
-                metrics["sdr"].extend(sdr.tolist())
-                metrics["sir"].extend(sir.tolist())
-                metrics["sar"].extend(sar.tolist())
-            else:
-                metrics["sdr"].extend(sdr_alt.tolist())
-                metrics["sir"].extend(sir_alt.tolist())
-                metrics["sar"].extend(sar_alt.tolist())
-
-        else:
-            metrics["sdr"].extend(sdr.tolist())
-            metrics["sir"].extend(sir.tolist())
-            metrics["sar"].extend(sar.tolist())
-            # print(j,len(metrics["sdr"]),sdr)
+        metrics["sdr"].extend(sdr.tolist())
+        metrics["sir"].extend(sir.tolist())
+        metrics["sar"].extend(sar.tolist())
+        # print(j,len(metrics["sdr"]),sdr)
 
         metrics["sdr_mix"].extend(sdr_mix.tolist())
         metrics["sir_mix"].extend(sir_mix.tolist())

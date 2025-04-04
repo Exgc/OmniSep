@@ -28,3 +28,7 @@ Resize and crop images
 ```sh
 python preprocess.py -i data/MUSIC/solo/frames -o data/MUSIC/solo/preprocessed -s -e
 ```
+Extract the ImageBind Feature
+```sh
+python extract_feature.py -i data/MUSIC/solo
+```
