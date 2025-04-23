@@ -1,9 +1,9 @@
 # **[ICLR 2025] OmniSep: Unified Omni-Modality Sound Separation with Query-Mixup**
 
 **[Xize Cheng](https://exgc.github.io)**,  Siqi Zheng,  Zehan Wang,  Minghui Fang,  Ziang Zhang,  Rongjie Huang,  Ziyang Ma,  Shengpeng Ji,  Jialong Zuo,  Tao Jin,  Zhou Zhao  
-<br>
-[【arXiv】](https://arxiv.org/abs/2410.21269) ｜[【Demo】](https://omnisep.github.io/)｜[【OpenReviewer】](https://openreview.net/forum?id=DkzZ1ooc7q)
-<br>
+
+[arXiv](https://arxiv.org/abs/2410.21269) ｜[Demo](https://omnisep.github.io/)｜[OpenReviewer](https://openreview.net/forum?id=DkzZ1ooc7q)
+
 ---
 
 ✅ TODO
