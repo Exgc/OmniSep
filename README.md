@@ -29,6 +29,10 @@ Please refer to the script under [`dataset/vggsound`](dataset/vggsound).
 Clone the repository and set up the environment:
 
 ```bash
+git clone https://github.com/facebookresearch/ImageBind.git
+cd Imagebind
+pip install .
+
 git clone https://github.com/Exgc/OmniSep.git
 cd OmniSep/omnisep
 
