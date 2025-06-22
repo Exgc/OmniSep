@@ -92,11 +92,11 @@ If you find this work useful for your research, please consider citing:
 
 ```bibtex
 @inproceedings{
-    cheng2025omnisep，
-    title={OmniSep：基于查询混合的统一全模态声音分离}，
-    作者={程熙泽、郑思齐、王泽涵、方明辉、张子昂、黄荣杰、季胜鹏、左家龙、金涛、赵周}，
-    booktitle={第十三届国际学习表征会议}，
-    年份={2025}，
+    cheng2025omnisep,
+    title={OmniSep: Unified Omni-Modality Sound Separation with Query-Mixup},
+    author={Xize Cheng and Siqi Zheng and Zehan Wang and Minghui Fang and Ziang Zhang and Rongjie Huang and Shengpeng Ji and Jialong Zuo and Tao Jin and Zhou Zhao},
+    booktitle={The Thirteenth International Conference on Learning Representations},
+    year={2025},
     url={https://openreview.net/forum?id=DkzZ1ooc7q}
 }
 ```
