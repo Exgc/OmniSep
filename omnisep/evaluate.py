@@ -251,6 +251,23 @@ def calc_metrics(
             print(j, 'not valid')
             continue
         # print(len(pred_wavs), pred_wavs[0].shape)
+        def compute_sisdr_single_channel(ref, est):
+            """计算单通道SISDR（兼容现有评估逻辑）"""
+            # 确保输入为单通道
+            ref = ref.flatten()
+            est = est.flatten()
+            
+            # 计算投影系数 alpha
+            alpha = np.dot(est, ref) / np.dot(ref, ref)
+            
+            # 生成目标信号和噪声信号
+            target = alpha * ref
+            e_noise = est - target
+            
+            # 计算能量比并转换为dB
+            numerator = np.dot(target, target)
+            denominator = np.dot(e_noise, e_noise)
+            return 10 * np.log10(numerator / (denominator + 1e-8))  # 避免除零
         if backend == "museval":
             sdr, _, sir, sar, _ = museval.metrics.bss_eval(
                 np.asarray(gts_wav), np.asarray(pred_wavs), np.inf
@@ -258,12 +275,17 @@ def calc_metrics(
             sdr = sdr[:1, 0]
             sir = sir[:1, 0]
             sar = sar[:1, 0]
+            sisdr = compute_sisdr_single_channel(gts_wav[0], pred_wavs[0])
             (sdr_mix, _, sir_mix, sar_mix, _,) = museval.metrics.bss_eval(
                 np.asarray(gts_wav), np.asarray([mix_wav[0:L]] * N), np.inf
             )
             sdr_mix = sdr_mix[:1, 0]
             sir_mix = sir_mix[:1, 0]
             sar_mix = sar_mix[:1, 0]
+            sisdr_mix = compute_sisdr_single_channel(gts_wav[0], np.asarray(mix_wav))
+        
+            sdri = sdr - sdr_mix
+            sisdri = sisdr - sisdr_mix
         elif backend == "mir_eval":
             sdr, sir, sar, _ = mir_eval.separation.bss_eval_sources(
                 np.asarray(gts_wav), np.asarray(pred_wavs), False
@@ -284,11 +306,16 @@ def calc_metrics(
         metrics["sdr"].extend(sdr.tolist())
         metrics["sir"].extend(sir.tolist())
         metrics["sar"].extend(sar.tolist())
+        metrics["sisdr"] = sisdr
         # print(j,len(metrics["sdr"]),sdr)
 
         metrics["sdr_mix"].extend(sdr_mix.tolist())
         metrics["sir_mix"].extend(sir_mix.tolist())
         metrics["sar_mix"].extend(sar_mix.tolist())
+        metrics["sisdr_mix"] = sisdr_mix
+        
+        metrics["sdri"] = sdri
+        metrics["sisdri"] = sisdri
     # print(len(metrics["sdr"]))
     return metrics
 
@@ -479,12 +506,17 @@ def main(args):
                     threshold=args.threshold
                 )
                 for key in batch_metrics:
-                    metrics[key].extend(batch_metrics[key])
+                    import numpy
+                    if isinstance(batch_metrics[key], numpy.float64):
+                        metrics[key] = batch_metrics[key]
+                    else:                        
+                        metrics[key].extend(batch_metrics[key])
 
                 pbar.set_postfix(
                     sdr=f"{np.mean(batch_metrics['sdr']):.2f}",
                     sir=f"{np.mean(batch_metrics['sir']):.2f}",
                     sar=f"{np.mean(batch_metrics['sar']):.2f}",
+                    sisdr=f"{np.mean(batch_metrics['sisdr']):.2f}",
                 )
                 # print(len(batch_metrics['sdr']))
                 # print(batch['infos'][0][0])
@@ -500,16 +532,21 @@ def main(args):
             f"Evaluation results ({mode} query): \n"
             f"sdr={means['sdr']:.4f}±{errs['sdr']:.4f}, "
             f"sir={means['sir']:.4f}±{errs['sir']:.4f}, "
-            f"sar={means['sar']:.4f}±{errs['sar']:.4f}\n"
+            f"sar={means['sar']:.4f}±{errs['sar']:.4f}, "
+            f"sisdr={means['sisdr']:.4f}, "
+            f"sisdri={means['sisdri']:.4f}\n"
             f"sdr_median={medians['sdr']:.4f}, "
             f"sir_median={medians['sir']:.4f}, "
-            f"sar_median={medians['sar']:.4f}\n"
+            f"sar_median={medians['sar']:.4f}, "
+            f"sisdr_median={medians['sisdr']:.4f}\n"
             f"sdr_mix={means['sdr_mix']:.4f}±{errs['sdr_mix']:.4f}, "
             f"sir_mix={means['sir_mix']:.4f}±{errs['sir_mix']:.4f}, "
-            f"sar_mix={means['sar_mix']:.4f}±{errs['sar_mix']:.4f}\n"
+            f"sar_mix={means['sar_mix']:.4f}±{errs['sar_mix']:.4f}, "
+            f"sisdr_mix={means['sisdr_mix']:.4f}\n"
             f"sdr_mix_median={medians['sdr_mix']:.4f}, "
             f"sir_mix_median={medians['sir_mix']:.4f}, "
-            f"sar_mix_median={medians['sar_mix']:.4f}"
+            f"sar_mix_median={medians['sar_mix']:.4f}, "
+            f"sisdr_mix_median={medians['sisdr_mix']:.4f}"
         )
     # print(len(inf))
     # for i in range(len(res[0])):
