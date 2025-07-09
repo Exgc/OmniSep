@@ -10,8 +10,8 @@
 
 - [x] Release the omnisep training codes.
 - [x] Release the code for data preprocess.
-- [ ] Release the inference codes.
-- [ ] Release the checkpoints.
+- [x] Release the inference codes.
+- [x] Release the checkpoints.
 - [ ] Implementation based on CLAPSep.
 
 ---
