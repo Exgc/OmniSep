@@ -2,12 +2,14 @@
 import argparse
 import collections
 import logging
+import os
 import pathlib
 import pprint
 import random
 import sys
 import types
 
+import dataset
 # import clip
 import mir_eval.separation
 import museval.metrics
@@ -20,16 +22,13 @@ import torch.optim
 import torch.utils.data
 import torchvision
 import tqdm
-
-from omnisep import OmniSep
-import dataset
 import utils
-from torch.nn import functional as F
-import os
-
 from imagebind import data
 from imagebind.models import imagebind_model
 from imagebind.models.imagebind_model import ModalityType
+from torch.nn import functional as F
+
+from omnisep import OmniSep
 
 
 @utils.resolve_paths
@@ -250,24 +249,73 @@ def calc_metrics(
         if not valid:
             print(j, 'not valid')
             continue
-        # print(len(pred_wavs), pred_wavs[0].shape)
-        def compute_sisdr_single_channel(ref, est):
-            """计算单通道SISDR（兼容现有评估逻辑）"""
-            # 确保输入为单通道
-            ref = ref.flatten()
-            est = est.flatten()
-            
-            # 计算投影系数 alpha
-            alpha = np.dot(est, ref) / np.dot(ref, ref)
-            
-            # 生成目标信号和噪声信号
-            target = alpha * ref
-            e_noise = est - target
-            
-            # 计算能量比并转换为dB
-            numerator = np.dot(target, target)
-            denominator = np.dot(e_noise, e_noise)
-            return 10 * np.log10(numerator / (denominator + 1e-8))  # 避免除零
+        def si_sdr(ref, est, eps=1e-8):
+            ref = np.asarray(ref).astype(np.float64).flatten()
+            est = np.asarray(est).astype(np.float64).flatten()
+            L = min(ref.shape[0], est.shape[0])
+            ref, est = ref[:L], est[:L]
+            ref = ref - ref.mean()
+            est = est - est.mean()
+            denom = np.dot(ref, ref) + eps
+            alpha = np.dot(est, ref) / denom
+            e_target = alpha * ref
+            e_noise  = est - e_target
+            return 10.0 * np.log10((np.dot(e_target, e_target) + eps) /
+                                (np.dot(e_noise,  e_noise)  + eps))
+
+        def compute_sisdri_for_sample(audios, pred_wavs, mix_wav, j, N):
+            """
+            @params
+            audios: list of N tensors, each [B, ...]
+            pred_wavs: list of N numpy arrays (1D) or lists
+            mix_wav: numpy array (1D)
+            @return 
+            (sisdr_list, sisdr_mix_list, sisdri_sample)
+            """
+            # 统一裁剪长度
+            Ls = []
+            for n in range(N):
+                Ls.append(len(pred_wavs[n]))
+                Ls.append(audios[n][j].shape[0])
+            Ls.append(len(mix_wav))
+            L = int(min(Ls))
+
+            refs = [audios[k][j, :L].cpu().numpy() if hasattr(audios[k], "cpu") else audios[k][j][:L] for k in range(N)]
+            ests = [pred_wavs[n][:L] for n in range(N)]
+            mix_seg = np.asarray(mix_wav[:L])
+
+            # 构造 SI-SDR 矩阵 S[k, n]
+            S = np.empty((N, N), dtype=np.float64)
+            for k in range(N):
+                for n in range(N):
+                    S[k, n] = si_sdr(refs[k], ests[n])
+
+            # 匈牙利算法做最大化（最小化 -S）
+            try:
+                from scipy.optimize import linear_sum_assignment
+                rows, cols = linear_sum_assignment(-S)
+            except Exception:
+                # 退化到贪心：每步选剩余列里 S 最大的（对大 N 不最优，但能工作）
+                rows = np.arange(N)
+                remaining = set(range(N))
+                cols = []
+                for k in rows:
+                    best_n = max(remaining, key=lambda n: S[k, n])
+                    cols.append(best_n)
+                    remaining.remove(best_n)
+                cols = np.array(cols, dtype=int)
+
+            # 逐源 SI-SDR（按最佳匹配）
+            sisdr_list = [S[k, n] for k, n in zip(rows, cols)]
+
+            # 混合基线（每个参考源 vs mix）
+            sisdr_mix_list = [si_sdr(refs[k], mix_seg) for k in range(N)]
+
+            # 样本级提升（平均）
+            sisdri_sample = float(np.mean(np.asarray(sisdr_list) - np.asarray(sisdr_mix_list)))
+
+            return sisdr_list, sisdr_mix_list, sisdri_sample
+
         if backend == "museval":
             sdr, _, sir, sar, _ = museval.metrics.bss_eval(
                 np.asarray(gts_wav), np.asarray(pred_wavs), np.inf
@@ -275,17 +323,16 @@ def calc_metrics(
             sdr = sdr[:1, 0]
             sir = sir[:1, 0]
             sar = sar[:1, 0]
-            sisdr = compute_sisdr_single_channel(gts_wav[0], pred_wavs[0])
+            # sisdr = compute_sisdr_single_channel(gts_wav[0], pred_wavs[0])
             (sdr_mix, _, sir_mix, sar_mix, _,) = museval.metrics.bss_eval(
                 np.asarray(gts_wav), np.asarray([mix_wav[0:L]] * N), np.inf
             )
             sdr_mix = sdr_mix[:1, 0]
             sir_mix = sir_mix[:1, 0]
             sar_mix = sar_mix[:1, 0]
-            sisdr_mix = compute_sisdr_single_channel(gts_wav[0], np.asarray(mix_wav))
-        
-            sdri = sdr - sdr_mix
-            sisdri = sisdr - sisdr_mix
+            # sisdr_mix = compute_sisdr_single_channel(gts_wav[0], np.asarray(mix_wav))
+            sisdr_list, sisdr_mix_list, sisdri_sample = compute_sisdri_for_sample(audios, pred_wavs, mix_wav, j, N)
+
         elif backend == "mir_eval":
             sdr, sir, sar, _ = mir_eval.separation.bss_eval_sources(
                 np.asarray(gts_wav), np.asarray(pred_wavs), False
@@ -306,17 +353,14 @@ def calc_metrics(
         metrics["sdr"].extend(sdr.tolist())
         metrics["sir"].extend(sir.tolist())
         metrics["sar"].extend(sar.tolist())
-        metrics["sisdr"] = sisdr
-        # print(j,len(metrics["sdr"]),sdr)
 
         metrics["sdr_mix"].extend(sdr_mix.tolist())
         metrics["sir_mix"].extend(sir_mix.tolist())
         metrics["sar_mix"].extend(sar_mix.tolist())
-        metrics["sisdr_mix"] = sisdr_mix
         
-        metrics["sdri"] = sdri
-        metrics["sisdri"] = sisdri
-    # print(len(metrics["sdr"]))
+        metrics["sisdr"].extend(sisdr_list)
+        metrics["sisdr_mix"].extend(sisdr_mix_list)
+        metrics["sisdri"].append(sisdri_sample)
     return metrics
 
 
