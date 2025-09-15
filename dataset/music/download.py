@@ -7,9 +7,9 @@ import sys
 
 import joblib
 import tqdm
-import youtube_dl
-
 import utils
+# import youtube_dl
+import yt_dlp as youtube_dl
 
 
 @utils.resolve_paths
@@ -106,8 +106,9 @@ def main():
             "outtmpl": f"{args.out_dir}/{instrument}/%(id)s.%(ext)s",
             "quiet": True,
             "cachedir": False,
-            "nooverwrites": args.skip_existing,
+            "overwrites": not args.skip_existing,
             "ignoreerrors": args.ignore_exceptions,
+            "cookies-from-browser": "chrome"
         }
 
         # Handle multiprocessing
